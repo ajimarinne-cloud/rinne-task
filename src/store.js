@@ -24,6 +24,10 @@ function save(tasks) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
 }
 
+function sameTasks(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 // タイトルから期限を自動認識（「7/8までに」「明日」「今日」「7月8日」など）
 export function parseDeadlineFromTitle(title) {
   if (!title) return null;
@@ -69,12 +73,19 @@ export function useTasks() {
   const [synced, setSynced] = useState(!supabase); // クラウド未設定ならローカルのみ
   const loaded = useRef(false);
   const saveTimer = useRef(null);
+  const tasksRef = useRef(tasks);
+  const syncingFromCloud = useRef(false);
+
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
 
   // 起動時にクラウドから読み込み（クラウドが正、なければローカルをアップロード）
   useEffect(() => {
     if (!supabase) return;
     fetchCloudTasks().then(cloud => {
       if (cloud && Array.isArray(cloud)) {
+        syncingFromCloud.current = true;
         setTasks(cloud);
       }
       loaded.current = true;
@@ -82,10 +93,27 @@ export function useTasks() {
     });
   }, []);
 
+  // LINEなど外部から追加されたタスクを画面へ反映
+  useEffect(() => {
+    if (!supabase) return;
+    const timer = setInterval(async () => {
+      const cloud = await fetchCloudTasks();
+      if (cloud && Array.isArray(cloud) && !sameTasks(cloud, tasksRef.current)) {
+        syncingFromCloud.current = true;
+        setTasks(cloud);
+      }
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
   // 変更をローカル保存＋クラウドへdebounce保存
   useEffect(() => {
     save(tasks);
     if (!supabase || !loaded.current) return;
+    if (syncingFromCloud.current) {
+      syncingFromCloud.current = false;
+      return;
+    }
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => saveCloudTasks(tasks), 800);
     return () => clearTimeout(saveTimer.current);
