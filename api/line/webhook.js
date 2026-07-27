@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 
 const ROW_ID = 1;
+const FALLBACK_SUPABASE_URL = 'https://tzmpnfpntyiaciwcceau.supabase.co';
 
 function send(res, status, data) {
   res.status(status).json(data);
@@ -76,9 +77,31 @@ function createTask(title) {
   };
 }
 
+function normalizeSupabaseUrl(value) {
+  const raw = String(value || '').trim();
+  const withoutTrailingSlash = raw.replace(/\/+$/, '');
+  const withProtocol = withoutTrailingSlash && !/^https?:\/\//i.test(withoutTrailingSlash)
+    ? `https://${withoutTrailingSlash}`
+    : withoutTrailingSlash;
+
+  if (/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(withProtocol)) {
+    return withProtocol;
+  }
+
+  return FALLBACK_SUPABASE_URL;
+}
+
 function getSupabaseEnv() {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const rawUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const url = normalizeSupabaseUrl(rawUrl);
+  const key = String(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '').trim();
+
+  try {
+    console.info(`Using Supabase host: ${new URL(url).host}`);
+  } catch {
+    console.info('Using Supabase host: invalid-url');
+  }
+
   return { url, key };
 }
 
