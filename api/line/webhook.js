@@ -20,7 +20,10 @@ function verifyLineSignature(rawBody, signature, channelSecret) {
     .createHmac('sha256', channelSecret)
     .update(rawBody)
     .digest('base64');
-  return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature));
+  const digestBuffer = Buffer.from(digest);
+  const signatureBuffer = Buffer.from(signature);
+  if (digestBuffer.length !== signatureBuffer.length) return false;
+  return crypto.timingSafeEqual(digestBuffer, signatureBuffer);
 }
 
 function parseDeadlineFromTitle(title) {
@@ -117,7 +120,7 @@ async function replyToLine(replyToken, text) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token || !replyToken) return;
 
-  await fetch('https://api.line.me/v2/bot/message/reply', {
+  const response = await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -128,6 +131,10 @@ async function replyToLine(replyToken, text) {
       messages: [{ type: 'text', text }],
     }),
   });
+
+  if (!response.ok) {
+    console.warn(`LINE reply failed: ${response.status}`);
+  }
 }
 
 export default async function handler(req, res) {
@@ -144,20 +151,31 @@ export default async function handler(req, res) {
     return send(res, 401, { ok: false, error: 'Invalid LINE signature' });
   }
 
-  const body = JSON.parse(rawBody || '{}');
-  const textEvents = (body.events || []).filter(event =>
-    event.type === 'message' && event.message?.type === 'text' && event.message.text?.trim()
-  );
+  let body;
+  try {
+    body = JSON.parse(rawBody || '{}');
+  } catch {
+    return send(res, 400, { ok: false, error: 'Invalid JSON body' });
+  }
 
-  if (textEvents.length === 0) return send(res, 200, { ok: true, added: 0 });
+  try {
+    const textEvents = (body.events || []).filter(event =>
+      event.type === 'message' && event.message?.type === 'text' && event.message.text?.trim()
+    );
 
-  const existingTasks = await fetchTasks();
-  const newTasks = textEvents.map(event => createTask(event.message.text));
-  await saveTasks([...existingTasks, ...newTasks]);
+    if (textEvents.length === 0) return send(res, 200, { ok: true, added: 0 });
 
-  await Promise.all(textEvents.map(event =>
-    replyToLine(event.replyToken, `タスクに追加しました: ${event.message.text.trim()}`)
-  ));
+    const existingTasks = await fetchTasks();
+    const newTasks = textEvents.map(event => createTask(event.message.text));
+    await saveTasks([...existingTasks, ...newTasks]);
 
-  return send(res, 200, { ok: true, added: newTasks.length });
+    await Promise.allSettled(textEvents.map(event =>
+      replyToLine(event.replyToken, `タスクに追加しました: ${event.message.text.trim()}`)
+    ));
+
+    return send(res, 200, { ok: true, added: newTasks.length });
+  } catch (error) {
+    console.error(error);
+    return send(res, 500, { ok: false, error: 'Failed to add LINE task' });
+  }
 }
