@@ -105,6 +105,15 @@ function getSupabaseEnv() {
   return { url, key };
 }
 
+function publicErrorMessage(error) {
+  const message = String(error?.message || error || 'unknown error');
+  if (message.includes('Supabase env is missing')) return 'Supabaseの環境変数が足りません。VercelのSUPABASE_URLとSUPABASE_ANON_KEYを確認してください。';
+  if (message.includes('Supabase fetch failed')) return `Supabase読み込み失敗: ${message}`;
+  if (message.includes('Supabase save failed')) return `Supabase保存失敗: ${message}`;
+  if (message.includes('fetch failed') || message.includes('ENOTFOUND')) return `Supabase接続失敗: ${message.slice(0, 180)}`;
+  return `タスク追加に失敗しました: ${message.slice(0, 180)}`;
+}
+
 async function fetchTasks() {
   const { url, key } = getSupabaseEnv();
   if (!url || !key) throw new Error('Supabase env is missing');
@@ -151,7 +160,7 @@ async function replyToLine(replyToken, text) {
     },
     body: JSON.stringify({
       replyToken,
-      messages: [{ type: 'text', text }],
+      messages: [{ type: 'text', text: String(text).slice(0, 4500) }],
     }),
   });
 
@@ -181,13 +190,13 @@ export default async function handler(req, res) {
     return send(res, 400, { ok: false, error: 'Invalid JSON body' });
   }
 
+  const textEvents = (body.events || []).filter(event =>
+    event.type === 'message' && event.message?.type === 'text' && event.message.text?.trim()
+  );
+
+  if (textEvents.length === 0) return send(res, 200, { ok: true, added: 0 });
+
   try {
-    const textEvents = (body.events || []).filter(event =>
-      event.type === 'message' && event.message?.type === 'text' && event.message.text?.trim()
-    );
-
-    if (textEvents.length === 0) return send(res, 200, { ok: true, added: 0 });
-
     const existingTasks = await fetchTasks();
     const newTasks = textEvents.map(event => createTask(event.message.text));
     await saveTasks([...existingTasks, ...newTasks]);
@@ -199,6 +208,8 @@ export default async function handler(req, res) {
     return send(res, 200, { ok: true, added: newTasks.length });
   } catch (error) {
     console.error(error);
-    return send(res, 500, { ok: false, error: 'Failed to add LINE task' });
+    const debugMessage = publicErrorMessage(error);
+    await Promise.allSettled(textEvents.map(event => replyToLine(event.replyToken, debugMessage)));
+    return send(res, 200, { ok: false, error: debugMessage });
   }
 }
