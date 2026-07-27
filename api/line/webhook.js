@@ -105,13 +105,28 @@ function getSupabaseEnv() {
   return { url, key };
 }
 
-function publicErrorMessage(error) {
+function getErrorDetails(error) {
   const message = String(error?.message || error || 'unknown error');
+  const cause = error?.cause?.message ? ` cause=${error.cause.message}` : '';
+  const code = error?.cause?.code ? ` code=${error.cause.code}` : '';
+  const { url } = getSupabaseEnv();
+  let host = 'unknown-host';
+  try {
+    host = new URL(url).host;
+  } catch {
+    host = 'invalid-url';
+  }
+  return { message, cause, code, host };
+}
+
+function publicErrorMessage(error) {
+  const { message, cause, code, host } = getErrorDetails(error);
+  const detail = `${message}${code}${cause}`.slice(0, 240);
   if (message.includes('Supabase env is missing')) return 'Supabaseの環境変数が足りません。VercelのSUPABASE_URLとSUPABASE_ANON_KEYを確認してください。';
-  if (message.includes('Supabase fetch failed')) return `Supabase読み込み失敗: ${message}`;
-  if (message.includes('Supabase save failed')) return `Supabase保存失敗: ${message}`;
-  if (message.includes('fetch failed') || message.includes('ENOTFOUND')) return `Supabase接続失敗: ${message.slice(0, 180)}`;
-  return `タスク追加に失敗しました: ${message.slice(0, 180)}`;
+  if (message.includes('Supabase fetch failed')) return `Supabase読み込み失敗 host=${host}: ${detail}`;
+  if (message.includes('Supabase save failed')) return `Supabase保存失敗 host=${host}: ${detail}`;
+  if (message.includes('fetch failed') || detail.includes('ENOTFOUND')) return `Supabase接続失敗 host=${host}: ${detail}`;
+  return `タスク追加に失敗しました host=${host}: ${detail}`;
 }
 
 async function fetchTasks() {
