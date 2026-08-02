@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 
 const ROW_ID = 1;
-const FALLBACK_SUPABASE_URL = 'https://tzmpnfpntyiaciwcceau.supabase.co';
+const FALLBACK_SUPABASE_URL = 'https://tzmpnfpntiyaciwcceau.supabase.co';
 
 function send(res, status, data) {
   res.status(status).json(data);
