@@ -64,11 +64,15 @@ function buildDigest(tasks) {
   const today = toJstDateString();
   const threeDaysLater = addDays(today, 3);
   const activeTasks = tasks.filter(task => task?.status !== 'done');
+  const overdueTasks = activeTasks.filter(task => task.deadline && task.deadline < today);
   const todayTasks = activeTasks.filter(task => task.deadline === today);
   const soonTasks = activeTasks.filter(task => task.deadline && task.deadline > today && task.deadline <= threeDaysLater);
 
   const lines = [
     `RINNEタスク ${formatDateLabel(today)}`,
+    '',
+    '期限切れタスク',
+    ...formatTaskLines(overdueTasks, true),
     '',
     '今日のタスク',
     ...formatTaskLines(todayTasks),
