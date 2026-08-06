@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, List, GitFork, CalendarDays, Archive as ArchiveIcon, FileText, Bell } from 'lucide-react';
+import { Plus, List, GitFork, CalendarDays, Archive as ArchiveIcon, FileText, Bell, LayoutGrid } from 'lucide-react';
 import { useTasks, isOverdue, isDueSoon } from './store';
 import TaskGraph from './TaskGraph';
 import TaskList from './TaskList';
@@ -7,6 +7,7 @@ import TaskDetail from './TaskDetail';
 import TranscriptImport from './TranscriptImport';
 import Archive from './Archive';
 import CalendarView from './CalendarView';
+import Apps from './Apps';
 
 const C = {
   bg: '#0e0c18',
@@ -88,6 +89,7 @@ export default function App() {
     { key: 'graph', icon: <GitFork size={13} />, label: 'グラフ' },
     { key: 'calendar', icon: <CalendarDays size={13} />, label: 'カレンダー' },
     { key: 'archive', icon: <ArchiveIcon size={13} />, label: '振り返り' },
+    { key: 'apps', icon: <LayoutGrid size={13} />, label: 'アプリ' },
   ];
 
   return (
@@ -124,6 +126,7 @@ export default function App() {
         {view === 'graph' && <TaskGraph tasks={activeTasks} onSelectTask={setSelectedId} />}
         {view === 'calendar' && <CalendarView key={calYm} tasks={activeTasks} onSelectTask={setSelectedId} ym={calYm} onPrev={() => setCalYm(v => v - 1)} onNext={() => setCalYm(v => v + 1)} />}
         {view === 'archive' && <Archive tasks={tasks} onSelectTask={setSelectedId} />}
+        {view === 'apps' && <Apps />}
       </div>
 
       {selectedTask && (
